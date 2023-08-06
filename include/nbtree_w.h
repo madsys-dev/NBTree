@@ -61,7 +61,7 @@ void *data_alloc(size_t size)
 
 void *leaf_alloc(size_t size)
 {
-  printf("alloc %llu\n", curr_mem);
+  // printf("alloc %llu\n", curr_mem);
   void *ret = curr_mem;
   memset(ret, 0, size);
   curr_mem += size;
