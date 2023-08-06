@@ -14,30 +14,39 @@ using namespace std;
 extern "C" {
 
 struct BTree;
-
-void* btree_create(void);
+void init_btree_file(const char* key);
+void* btree_create();
 void btree_init_for_thread(int thread_id);
 int btree_insert(void* tree, entry_key_t key, entry_key_t value);
 int btree_remove(void* tree, entry_key_t key);
 entry_key_t btree_find(void* tree, entry_key_t key);
+
+entry_key_t btree_scan(void* tree, entry_key_t start, entry_key_t end);
+entry_key_t btree_next(void* tree, entry_key_t start, entry_key_t end);
+entry_key_t btree_last(void* tree, entry_key_t start, entry_key_t end);
+
 }
 
 char *thread_space_start_addr;
 __thread char *start_addr;
 __thread char *curr_addr;
-uint64_t allocate_size = 113ULL * 1024ULL * 1024ULL * 1024ULL;
+uint64_t allocate_size = 100 * SPACE_PER_THREAD;// * 1024ULL * 1024ULL * 1024ULL;
 
 char *thread_mem_start_addr;
 __thread char *start_mem;
 __thread char *curr_mem;
-uint64_t allocate_mem = 113ULL * 1024ULL * 1024ULL * 1024ULL;
+uint64_t allocate_mem = 100 * MEM_PER_THREAD;// * 1024ULL * 1024ULL * 1024ULL;
+
+__thread leaf_node_t *cursor;
+__thread int cursor_pos;
 
 struct BTree {
     btree* inner;
 };
 
-void* btree_create(void) {
-    int fd = open("/mnt/pmem1/btree", O_RDWR);
+void init_btree_file(const char* key) {
+    printf("%s\n", key);
+    int fd = open(key, O_RDWR);
     if (fd < 0)
     {
         printf("[NVM MGR]\tfailed to open nvm file\n");
@@ -57,7 +66,8 @@ void* btree_create(void) {
     start_mem = (char *)mem;
     curr_mem = start_mem;
     thread_mem_start_addr = (char *)mem + MEM_OF_MAIN_THREAD;
-    
+}
+void* btree_create() {
     // Warm-up
     // printf("[COORDINATOR]\tWarm-up..\n");
     // printf("---\n");
@@ -71,11 +81,12 @@ void btree_init_for_thread(int thread_id) {
     curr_addr = start_addr;
     start_mem = thread_mem_start_addr + thread_id * MEM_PER_THREAD;
     curr_mem = start_mem;
+    // printf("%d %llu %llu %llu %llu", thread_id, curr_mem, start_mem, curr_addr, start_addr);
 }
 int btree_insert(void* tree, entry_key_t key, entry_key_t value) {
 
-    // printf("%ld -1\n", key);
-    // printf("%ld -2\n", key);
+    // printf("%ld insert\n", key);
+    // printf("%ld -2\n", value);
     bool ret = ((BTree*)(tree))->inner->insert(key, (char *)(value));
     // printf("%x insert %x\n", key, (entry_key_t)(curr_addr));
 
@@ -94,6 +105,28 @@ int btree_remove(void* tree, entry_key_t key) {
     return (entry_key_t)(((BTree*)(tree))->inner->remove(key));
 }
 
+entry_key_t btree_scan(void* tree, entry_key_t start, entry_key_t end) {
+    (entry_key_t)((BTree*)(tree))->inner->search(start);
+    return btree_next(tree, start, end);
+}
+entry_key_t btree_next(void* tree, entry_key_t start, entry_key_t end) {
+    char* ret = ((BTree*)(tree))->inner->next(start, end);
+    if (ret == NULL) {
+        return 0;
+    }
+    return (entry_key_t)(ret);
+}
+entry_key_t btree_last(void* tree, entry_key_t start, entry_key_t end) {
+    char* ret = ((BTree*)(tree))->inner->search(end);
+    if (ret != NULL) {
+        return (entry_key_t)(ret);
+    }
+    ret = (((BTree*)(tree))->inner->last(start, end));
+    if (ret == NULL || (entry_key_t)(ret) < start) {
+        return 0;
+    }
+    return (entry_key_t)(ret);
+}
 // int main(void) {
 //     void* tree = btree_create();
 //     printf("create ok\n");

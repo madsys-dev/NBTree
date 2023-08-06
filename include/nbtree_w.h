@@ -35,15 +35,17 @@ using entry_key_t = uint64_t;
 
 pthread_mutex_t print_mtx;
 
-const uint64_t SPACE_PER_THREAD = 2ULL * 1024ULL * 1024ULL * 1024ULL;
+const uint64_t SPACE_PER_THREAD = 1ULL * 1024ULL * 1024ULL * 1024ULL;
 const uint64_t SPACE_OF_MAIN_THREAD = 4ULL * 1024ULL * 1024ULL * 1024ULL;
 extern __thread char *start_addr;
 extern __thread char *curr_addr;
 
-const uint64_t MEM_PER_THREAD = 4ULL * 1024ULL * 1024ULL * 1024ULL;
+const uint64_t MEM_PER_THREAD = 1ULL * 1024ULL * 1024ULL * 1024ULL;
 const uint64_t MEM_OF_MAIN_THREAD = 4ULL * 1024ULL * 1024ULL * 1024ULL;
 extern __thread char *start_mem;
 extern __thread char *curr_mem;
+
+
 
 typedef tbb::speculative_spin_rw_mutex speculative_lock_t;
 typedef speculative_lock_t::scoped_lock htm_lock;
@@ -59,6 +61,7 @@ void *data_alloc(size_t size)
 
 void *leaf_alloc(size_t size)
 {
+  printf("alloc %llu\n", curr_mem);
   void *ret = curr_mem;
   memset(ret, 0, size);
   curr_mem += size;
@@ -87,13 +90,14 @@ public:
   ~btree();
   void setNewRoot(char *new_root, leaf_node_t *leaf = NULL);
   void btree_insert_internal(char *, entry_key_t, char *, uint32_t, leaf_node_t *leaf = NULL);
-  char *btree_search(entry_key_t);
   void print();
   void check();
   bool insert(entry_key_t, char *); 
   bool remove(entry_key_t);
   bool update(entry_key_t, char *);
   char *search(entry_key_t);
+  char *next(entry_key_t, entry_key_t);
+  char *last(entry_key_t, entry_key_t);
 private:
   static const uint64_t kFNVPrime64 = 1099511628211;
   unsigned char hashfunc(uint64_t val);
@@ -949,6 +953,10 @@ public:
   }
 };
 
+
+extern __thread leaf_node_t *cursor;
+extern __thread int cursor_pos;
+
 /*
  * class btree
  */
@@ -1485,6 +1493,52 @@ bool btree::modify(leaf_node_t *leaf, int pos, entry_key_t key, char *right)
 
   return true;
 }
+char *btree::next(entry_key_t start, entry_key_t end) {
+  char* res = NULL;
+
+  while (true) {
+    if (cursor_pos == cursor->number) {
+      // printf("leaf end %ld\n", cursor->data->kv[cursor_pos-1].key);
+      // res = search(cursor->data->kv[cursor_pos].key + 1);
+      cursor = cursor->next;
+      cursor_pos = 0;
+    }
+    
+    if (cursor == NULL) {
+      return res;
+    }
+    if ( end <= cursor->low_key) {
+      return res;
+    }
+    // printf("%d %ld\n", cursor_pos, cursor->data->kv[cursor_pos].key);
+    if (cursor->data->kv[cursor_pos].key >= start && cursor->data->kv[cursor_pos].key < end) {
+      res = cursor->data->kv[cursor_pos].ptr;
+      cursor_pos ++;
+      return res;
+    }
+    cursor_pos ++;
+
+  }
+  
+  return res;
+}
+
+char *btree::last(entry_key_t start, entry_key_t end) {
+  char* res = NULL;
+  int pos = -1;
+  int v = 0;
+  for (int i = 0; i < cursor->number; ++i)
+  {
+      if (cursor->data->kv[i].key < end && cursor->data->kv[i].key > v)
+      {
+          v = cursor->data->kv[i].key;
+          pos = i;
+      }
+  }
+  res = cursor->data->kv[pos].ptr;
+  return res;
+}
+
 
 char *btree::search(entry_key_t key)
 {
@@ -1503,7 +1557,8 @@ char *btree::search(entry_key_t key)
     res = NULL;
   else
     res = leaf->data->kv[pos].ptr;
-
+  cursor = leaf;
+  cursor_pos = 0;
   if (leaf->check_split())
   {
     // result is valid
@@ -1520,6 +1575,8 @@ char *btree::search(entry_key_t key)
       assert(key >= new_leaf->low_key);
       assert(key < new_leaf->high_key);
       pos = find_item(key, new_leaf, hash);
+      cursor = new_leaf;
+      cursor_pos = 0;
       if (pos == -1)
         return NULL;
       if (leaf->sync_flag)
@@ -1628,6 +1685,7 @@ bool btree::insert(entry_key_t key, char *right)
     // 6. Commit the insert
     bool res = leaf->set_slot(pos);
     leaf->unlock();
+
     break;
   }
 
