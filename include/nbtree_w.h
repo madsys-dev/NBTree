@@ -1529,13 +1529,15 @@ char *btree::last(entry_key_t start, entry_key_t end) {
   int v = 0;
   for (int i = 0; i < cursor->number; ++i)
   {
-      if (cursor->data->kv[i].key < end && cursor->data->kv[i].key > v)
+    // printf("%llu\n", cursor->data->kv[i].key);
+      if (cursor->data->kv[i].key < end && cursor->data->kv[i].key >= v)
       {
           v = cursor->data->kv[i].key;
           pos = i;
       }
   }
-  res = cursor->data->kv[pos].ptr;
+  if (pos != -1) 
+    res = cursor->data->kv[pos].ptr;
   return res;
 }
 
@@ -1694,7 +1696,6 @@ bool btree::insert(entry_key_t key, char *right)
 
 bool btree::remove(entry_key_t key)
 {
-
   int old_slot;
   leaf_node_t *leaf;
   bool retry;

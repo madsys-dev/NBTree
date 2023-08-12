@@ -30,12 +30,12 @@ entry_key_t btree_last(void* tree, entry_key_t start, entry_key_t end);
 char *thread_space_start_addr;
 __thread char *start_addr;
 __thread char *curr_addr;
-uint64_t allocate_size = 100 * SPACE_PER_THREAD;// * 1024ULL * 1024ULL * 1024ULL;
+uint64_t allocate_size = 150 * SPACE_PER_THREAD;// * 1024ULL * 1024ULL * 1024ULL;
 
 char *thread_mem_start_addr;
 __thread char *start_mem;
 __thread char *curr_mem;
-uint64_t allocate_mem = 100 * MEM_PER_THREAD;// * 1024ULL * 1024ULL * 1024ULL;
+uint64_t allocate_mem = 150 * MEM_PER_THREAD;// * 1024ULL * 1024ULL * 1024ULL;
 
 __thread leaf_node_t *cursor;
 __thread int cursor_pos;
@@ -85,10 +85,8 @@ void btree_init_for_thread(int thread_id) {
 }
 int btree_insert(void* tree, entry_key_t key, entry_key_t value) {
 
-    // printf("%ld insert\n", key);
     // printf("%ld -2\n", value);
     bool ret = ((BTree*)(tree))->inner->insert(key, (char *)(value));
-    // printf("%x insert %x\n", key, (entry_key_t)(curr_addr));
 
     if(ret == false) {
         printf("%ld insert failed\n", key);
@@ -114,6 +112,7 @@ entry_key_t btree_next(void* tree, entry_key_t start, entry_key_t end) {
     if (ret == NULL) {
         return 0;
     }
+    
     return (entry_key_t)(ret);
 }
 entry_key_t btree_last(void* tree, entry_key_t start, entry_key_t end) {
@@ -122,7 +121,9 @@ entry_key_t btree_last(void* tree, entry_key_t start, entry_key_t end) {
         return (entry_key_t)(ret);
     }
     ret = (((BTree*)(tree))->inner->last(start, end));
-    if (ret == NULL || (entry_key_t)(ret) < start) {
+
+    if (ret == NULL) {
+        // printf("%llu %llu\n", (entry_key_t)(ret), start);
         return 0;
     }
     return (entry_key_t)(ret);
