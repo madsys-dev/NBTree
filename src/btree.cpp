@@ -58,6 +58,7 @@ void init_btree_file(const char* key) {
         exit(-1);
     }
     void *pmem = mmap(NULL, allocate_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    // void *pmem = malloc(allocate_size);
     memset(pmem, 0, SPACE_OF_MAIN_THREAD);
     start_addr = (char *)pmem;
     curr_addr = start_addr;
